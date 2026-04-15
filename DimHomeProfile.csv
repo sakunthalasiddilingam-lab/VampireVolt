@@ -1,0 +1,11 @@
+Home_ID,Square_Footage,Occupants,Climate_Zone
+H001,900,2,Tropical
+H002,1100,3,Tropical
+H003,1250,3,Temperate
+H004,1450,4,Temperate
+H005,1600,4,Hot
+H006,1800,5,Hot
+H007,2100,5,Cold
+H008,2400,6,Cold
+H009,2700,4,Tropical
+H010,3000,6,Temperate

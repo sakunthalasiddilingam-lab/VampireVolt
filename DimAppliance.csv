@@ -1,0 +1,11 @@
+Device_ID,Device_Name,Category,Standby_Threshold_Watts,Is_Vampire_Source
+D001,Refrigerator,Essential,50,False
+D002,Air Conditioner,Essential,100,False
+D003,Washing Machine,Essential,20,False
+D004,Television,Non-Essential,10,True
+D005,Laptop,Non-Essential,15,True
+D006,Mobile Charger,Non-Essential,5,True
+D007,Microwave,Essential,25,False
+D008,Lights,Essential,12,True
+D009,Router,Essential,10,True
+D010,Water Heater,Essential,80,False
