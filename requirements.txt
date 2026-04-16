@@ -6,3 +6,4 @@ matplotlib
 openpyxl
 scikit-learn
 python-dotenv
+groq

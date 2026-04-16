@@ -6,7 +6,13 @@ import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 from dotenv import load_dotenv
-from groq import Groq
+
+try:
+    from groq import Groq
+except ImportError:
+    Groq = None
+
+
 
 warnings.filterwarnings("ignore")
 
@@ -23,8 +29,13 @@ st.set_page_config(
 # LOAD ENV + API
 # =========================================================
 load_dotenv()
-api_key = os.getenv("API_KEY")
-client = Groq(api_key=api_key) if api_key else None
+
+try:
+    api_key = st.secrets["API_KEY"]
+except Exception:
+    api_key = os.getenv("API_KEY")
+
+client = Groq(api_key=api_key) if (api_key and Groq is not None) else None
 
 # =========================================================
 # THEME STATE
