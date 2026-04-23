@@ -516,41 +516,7 @@ def smart_insights(df):
         f"spreading heavy appliance usage across the day, and monitoring night-time activity."
     )
 
-    st.markdown("### 📌 Key Energy Insight")
-
-    left, right = st.columns([1, 1])
-
-    with left:
-        st.info(
-            f"🔌 **Highest standby waste device:**\n\n"
-            f"{waste_device} with **{waste_value:.2f} W** of vampire load."
-        )
-
-        st.info(
-            f"⚡ **Highest average load device:**\n\n"
-            f"{avg_device} with **{avg_value:.2f} W** average power."
-        )
-
-        st.info(
-            f"📅 **Weekday energy:** {weekday_kwh:.2f} kWh\n\n"
-            f"**Weekend energy:** {weekend_kwh:.2f} kWh"
-        )
-
-    with right:
-        st.info(
-            f"🔌 **Why is it like this?:**\n\n"
-            f"{why_final}"
-        )
-
-        st.info(
-            f"⚡ **Suggestions**\n\n"
-            f"{suggestion_text}"
-        )
-
-        st.info(
-            f"📅 **Recommendations**\n\n"
-            f"{recommendation_text}"
-        )
+   
 
 # =========================================================
 # EXECUTIVE TAB
@@ -571,19 +537,16 @@ def tab_executive(df):
     anomaly_count = int(df["Is_Anomaly_Z"].sum())
     standby_hours = len(df[df["Is_Standby"]]) / 60
 
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         st.markdown(kpi_card("Total Energy", f"{total_kwh:.2f} kWh", "Total selected period"), unsafe_allow_html=True)
     with c2:
         st.markdown(kpi_card("Baseline Power", f"{baseline_power:.2f} W", "5th percentile power"), unsafe_allow_html=True)
     with c3:
-        style = "bad" if vampire_ratio > 20 else "neutral" if vampire_ratio > 10 else "good"
-        st.markdown(kpi_card("Vampire Ratio", f"{vampire_ratio:.1f}%", "Standby share", style), unsafe_allow_html=True)
-    with c4:
         st.markdown(kpi_card("Waste Cost", rupees(waste_cost), f"Total cost {rupees(total_cost)}", "bad"), unsafe_allow_html=True)
-    with c5:
+    with c4:
         st.markdown(kpi_card("Peak Load", f"{peak_load:.2f} W", f"Average {avg_load:.2f} W", "neutral"), unsafe_allow_html=True)
-    with c6:
+    with c5:
         st.markdown(kpi_card("Anomalies", f"{anomaly_count}", f"Standby hours {standby_hours:.1f}", "bad" if anomaly_count > 0 else "good"), unsafe_allow_html=True)
 
     section("Smart Insights")
@@ -904,31 +867,174 @@ def generate_ai_insights(df):
 
     anomaly_count = int(df["Is_Anomaly_Z"].sum())
     waste_cost = round(df["Vampire_Cost"].sum(), 2)
+    total_cost = round(df["Estimated_Cost"].sum(), 2)
 
-    top_device_series = (
-        df.groupby("Device_Name")["Vampire_Watts"]
-        .sum()
+    weekday_kwh = round(df.loc[df["Day_Type"] == "Weekday", "Energy_kWh"].sum(), 2)
+    weekend_kwh = round(df.loc[df["Day_Type"] == "Weekend", "Energy_kWh"].sum(), 2)
+
+    peak_hour_df = (
+        df.groupby("Hour")["Watts"]
+        .mean()
         .sort_values(ascending=False)
     )
-    top_waste_device = top_device_series.index[0] if not top_device_series.empty else "N/A"
+    peak_hour = int(peak_hour_df.index[0]) if not peak_hour_df.empty else 0
+    peak_hour_load = round(peak_hour_df.iloc[0], 2) if not peak_hour_df.empty else 0
+
+    # -----------------------------
+    # DEVICE-WISE CHECK FOR PROMPT
+    # -----------------------------
+    device_summary = (
+        df.groupby(["Device_Name", "Category"], dropna=False, as_index=False)
+        .agg(
+            Avg_Watts=("Watts", "mean"),
+            Max_Watts=("Watts", "max"),
+            Total_Energy_kWh=("Energy_kWh", "sum"),
+            Vampire_Watts=("Vampire_Watts", "sum"),
+            Vampire_Cost=("Vampire_Cost", "sum"),
+            Readings=("Reading_Key", "count")
+        )
+        .sort_values(["Vampire_Watts", "Total_Energy_kWh"], ascending=False)
+    )
+
+    if device_summary.empty:
+        device_text = "No device data available."
+        top_waste_device = "N/A"
+        top_waste_value = 0
+    else:
+        top_waste_device = device_summary.iloc[0]["Device_Name"]
+        top_waste_value = round(device_summary.iloc[0]["Vampire_Watts"], 2)
+
+        device_lines = []
+        for _, row in device_summary.head(10).iterrows():
+            device_name = str(row["Device_Name"])
+            category = str(row["Category"])
+            avg_watts = round(row["Avg_Watts"], 2)
+            max_watts = round(row["Max_Watts"], 2)
+            total_energy_dev = round(row["Total_Energy_kWh"], 4)
+            vamp_watts = round(row["Vampire_Watts"], 2)
+            vamp_cost = round(row["Vampire_Cost"], 2)
+
+            lname = device_name.lower()
+            lcat = category.lower()
+
+            # simple device classification for better prompt grounding
+            if any(x in lname for x in ["light", "bulb", "lamp", "tube"]) or "light" in lcat:
+                device_type = "lighting"
+            elif any(x in lname for x in ["tv", "router", "wifi", "set top", "computer", "laptop", "monitor", "printer", "charger", "adapter"]):
+                device_type = "electronics"
+            elif any(x in lname for x in ["fridge", "refrigerator", "ac", "air conditioner", "cooler", "fan", "washing machine", "heater", "oven", "microwave"]):
+                device_type = "appliance"
+            else:
+                device_type = "general"
+
+            device_lines.append(
+                f"- Device: {device_name} | Category: {category} | Type: {device_type} | "
+                f"Avg Power: {avg_watts} W | Max Power: {max_watts} W | "
+                f"Energy: {total_energy_dev} kWh | Standby Waste: {vamp_watts} W | "
+                f"Standby Cost: ₹{vamp_cost}"
+            )
+
+        device_text = "\n".join(device_lines)
+
+    # Top active-usage device
+    top_active_df = (
+        df.groupby("Device_Name", as_index=False)["Watts"]
+        .mean()
+        .sort_values("Watts", ascending=False)
+    )
+    top_active_device = top_active_df.iloc[0]["Device_Name"] if not top_active_df.empty else "N/A"
+    top_active_value = round(top_active_df.iloc[0]["Watts"], 2) if not top_active_df.empty else 0
+
 
     prompt = f"""
-    You are an energy analytics expert.
+You are a practical energy consultant.
 
-    Analyze this energy dataset:
+Your job is to give ONLY device-specific, real-world actions.
 
-    Total Energy: {total_kwh} kWh
-    Vampire Load Ratio: {vampire_ratio}%
-    Anomalies: {anomaly_count}
-    Waste Cost: ₹{waste_cost}
-    Top Waste Device: {top_waste_device}
+STRICT RULES:
+- Use ONLY the devices present in the dataset
+- If only one device is present → DO NOT mention any other device
+- Do NOT mix devices (example: TV data → NO refrigerator suggestions)
+- Do NOT give general advice
+- Do NOT give textbook lines
+- Every suggestion must be directly usable
+- No vague words like "optimize", "improve", "monitor"
+- Be specific and action-based
 
-    Provide:
-    - Key Problems
-    - Important Insights
-    - 5 Actionable Recommendations
-    - Final Advice
-    """
+DEVICE RULES:
+
+Television:
+- Valid:
+  - turn OFF fully (not standby)
+  - use smart plug (only if standby exists)
+  - reduce idle usage
+- Invalid:
+  - NO bulb/LED suggestions
+  - NO temperature suggestions
+
+Refrigerator:
+- NEVER suggest turning OFF
+- Only:
+  - temperature setting
+  - maintenance
+  - reduce door opening
+
+Lights:
+- LED allowed ONLY here
+
+Electronics:
+- shutdown instead of standby
+- smart plug only if standby exists
+
+CRITICAL:
+- If device is not in dataset → DO NOT mention it
+- If suggestion is not valid → SKIP it
+- Accuracy > number of points
+
+DATA:
+- Energy: {total_kwh} kWh
+- Waste: {vampire_ratio}%
+- Peak hour: {peak_hour}
+- Top device: {top_waste_device}
+
+Devices:
+{device_text}
+
+OUTPUT FORMAT:
+
+### Business Summary
+2 simple lines:
+- overall condition
+- main issue device
+
+### Real Problems
+Max 3 points (only real ones)
+
+### Smart Actions
+Give 4 clear actions:
+- short
+- direct
+- device-specific
+- no repetition
+
+### Fix / Upgrade
+Only if needed
+Else: "No major upgrade required"
+
+### Priority Plan
+1. Main fix
+2. Second
+3. Third
+
+### Final Advice
+2 short business lines
+
+FINAL CHECK:
+- Did I mention only selected devices?
+- Are all suggestions valid for that device?
+
+If NO → remove that line.
+"""
 
     if client is None:
         return "⚠️ API_KEY not found. Add your Groq API key in a .env file like: API_KEY=your_key_here"
@@ -937,7 +1043,7 @@ def generate_ai_insights(df):
         response = client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.7
+            temperature=0.2
         )
         return response.choices[0].message.content
     except Exception as e:
@@ -976,7 +1082,7 @@ def tab_chatbot(df):
             """,
             unsafe_allow_html=True
         )
-        st.write(st.session_state.insights)
+        st.markdown(st.session_state.insights)
         st.markdown("</div>", unsafe_allow_html=True)
     else:
         st.info("Click 'Generate AI Insights' to create an intelligent summary for the selected filtered data.")
