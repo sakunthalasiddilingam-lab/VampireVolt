@@ -516,7 +516,41 @@ def smart_insights(df):
         f"spreading heavy appliance usage across the day, and monitoring night-time activity."
     )
 
-   
+    st.markdown("### 📌 Key Energy Insight")
+
+    left, right = st.columns([1, 1])
+
+    with left:
+        st.info(
+            f"🔌 **Highest standby waste device:**\n\n"
+            f"{waste_device} with **{waste_value:.2f} W** of vampire load."
+        )
+
+        st.info(
+            f"⚡ **Highest average load device:**\n\n"
+            f"{avg_device} with **{avg_value:.2f} W** average power."
+        )
+
+        st.info(
+            f"📅 **Weekday energy:** {weekday_kwh:.2f} kWh\n\n"
+            f"**Weekend energy:** {weekend_kwh:.2f} kWh"
+        )
+
+    with right:
+        st.info(
+            f"🔌 **Why is it like this?:**\n\n"
+            f"{why_final}"
+        )
+
+        st.info(
+            f"⚡ **Suggestions**\n\n"
+            f"{suggestion_text}"
+        )
+
+        st.info(
+            f"📅 **Recommendations**\n\n"
+            f"{recommendation_text}"
+        )
 
 # =========================================================
 # EXECUTIVE TAB
@@ -542,6 +576,7 @@ def tab_executive(df):
         st.markdown(kpi_card("Total Energy", f"{total_kwh:.2f} kWh", "Total selected period"), unsafe_allow_html=True)
     with c2:
         st.markdown(kpi_card("Baseline Power", f"{baseline_power:.2f} W", "5th percentile power"), unsafe_allow_html=True)
+ 
     with c3:
         st.markdown(kpi_card("Waste Cost", rupees(waste_cost), f"Total cost {rupees(total_cost)}", "bad"), unsafe_allow_html=True)
     with c4:
@@ -944,7 +979,6 @@ def generate_ai_insights(df):
     )
     top_active_device = top_active_df.iloc[0]["Device_Name"] if not top_active_df.empty else "N/A"
     top_active_value = round(top_active_df.iloc[0]["Watts"], 2) if not top_active_df.empty else 0
-
 
     prompt = f"""
 You are a practical energy consultant.
